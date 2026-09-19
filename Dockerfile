@@ -1,22 +1,18 @@
-# 기존 캐시를 완전히 무력화하기 위해 구조를 단순화한 최종본입니다.
+# 빌더가 완전히 새로운 레이어로 인식하도록 구문을 하나로 완전 통합했습니다.
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-    wget \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+
+# 패키지 설치부터 GIMPS 바이너리 세팅까지 캐시가 개입할 수 없도록 일괄 처리합니다.
+RUN apt-get update && apt-get install -y wget curl ca-certificates && \
+    mkdir -p /gimps && cd /gimps && \
+    wget --no-check-certificate https://mersenne.org && \
+    tar -zxvf gimps_v30.19.linux64.tar.gz && \
+    rm gimps_v30.19.linux64.tar.gz && \
+    chmod +x /gimps/mprime && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /gimps
 
-# 오류가 나던 git clone 단계를 완전히 지우고, 
-# GIMPS 공식 최신 리눅스 64비트 연산 프로그램을 직접 다운로드합니다.
-RUN wget https://mersenne.org && \
-    tar -zxvf gimps_v30.19.linux64.tar.gz && \
-    rm gimps_v30.19.linux64.tar.gz
-
-RUN chmod +x mprime
-
-# Fly.io 백그라운드에서 끊김 없이 자동 연산하도록 설정 (-m)
+# 백그라운드 자동 가동 옵션 부여
 CMD ["./mprime", "-m"]
