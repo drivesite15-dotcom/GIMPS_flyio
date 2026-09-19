@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 요청하신 GitHub 레포지토리 클론 및 파일 준비
+# 본인의 GitHub 레포지토리 주소로 정확하게 클론합니다
 RUN git clone https://github.com .
 
-# 프로그래밍 환경에 맞춰 빌드 시도 (Makefile이 있을 경우)
+# 프로그래밍 환경에 맞춰 빌드 시도 (Makefile이 존재할 경우 가동)
 RUN if [ -f Makefile ]; then make; fi
 
 
@@ -36,23 +36,27 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /gimps
 
-# 1단계에서 빌드된 파일이 있다면 복사
+# 1단계에서 빌드된 폴더가 있다면 통째로 복사
 COPY --from=builder /app /gimps/repo_build
 
-# [안전장치] 만약 레포지토리 빌드본에 mprime 실행 파일이 없다면, 
-# GIMPS 공식 최신 리눅스 64비트 바이너리(mprime)를 다운로드하여 세팅합니다.
-RUN if [ ! -f /gimps/repo_build/mprime ]; then \
-        echo "레포지토리 내 바이너리가 없어 공식 mprime을 다운로드합니다."; \
+# [안전장치] 만약 레포지토리 빌드본 내에 mprime(또는 prime95) 실행 파일이 없다면,
+# 연산이 멈추지 않도록 GIMPS 공식 최신 리눅스 64비트 바이너리를 다운로드하여 대체합니다.
+RUN if [ ! -f /gimps/repo_build/mprime ] && [ ! -f /gimps/repo_build/prime95 ]; then \
+        echo "레포지토리 내 실행 바이너리가 없어 공식 mprime을 다운로드합니다."; \
         wget https://mersenne.org && \
         tar -zxvf gimps_v30.19.linux64.tar.gz && \
         rm gimps_v30.19.linux64.tar.gz; \
     else \
-        mv /gimps/repo_build/mprime /gimps/mprime; \
+        if [ -f /gimps/repo_build/mprime ]; then mv /gimps/repo_build/mprime /gimps/mprime; fi; \
+        if [ -f /gimps/repo_build/prime95 ]; then mv /gimps/repo_build/prime95 /gimps/mprime; fi; \
     fi
 
 # 실행 권한 부여
 RUN chmod +x mprime
 
-# Fly.io는 지속적인 연산을 수행하므로 대화형 모드가 아닌 자동(Automated) 모드로 실행해야 합니다.
-# -m: 공식 프롬프트 없이 백그라운드/비대화형 모드로 실행하는 옵션입니다.
+# 프라임넷 자동 로그인을 위한 설정 파일 주입 (선택 사항)
+# 로컬에 local.txt를 만드셨다면 아래 줄의 주석(#)을 제거하세요
+# COPY local.txt ./
+
+# Fly.io 백그라운드 구동을 위한 비대화형 자동 모드(-m) 실행
 CMD ["./mprime", "-m"]
